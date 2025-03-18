@@ -18,6 +18,7 @@ import json
 import base64
 import cv2
 import numpy as np
+from typing_extensions import List
 
 
 class SuryaOCR(OCRInstance):

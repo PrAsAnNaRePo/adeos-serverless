@@ -10,9 +10,9 @@ from table_detection import OBBModule
 from table_recognition import SuryaOCRAgent
 import utils
 
-# Initialize models
+# Initialize models (using singleton pattern to avoid reinitializing on each request)
 detection_model = OBBModule(model_path='dynamic_quantized_21.onnx')
-recognition_model = SuryaOCRAgent()
+recognition_model = SuryaOCRAgent.get_instance()
 
 def handler(job):
     """

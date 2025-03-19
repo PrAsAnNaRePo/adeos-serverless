@@ -9,6 +9,7 @@ import io
 from PIL import Image
 import cv2
 import numpy as np
+import os
 from surya.detection import DetectionPredictor
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 from qwen_vl_utils import process_vision_info
@@ -21,6 +22,15 @@ import numpy as np
 from typing_extensions import List
 import polars as pl
 
+# Singleton instances
+_surya_ocr_instance = None
+_recognition_model_instance = None
+
+# Path in the volume
+VOLUME_PATH = "/workspace/adeos-volume"
+MODEL_PATH = f"{VOLUME_PATH}/models/Qwen2.5-VL-7B-Instruct"
+DETECTION_MODEL_PATH = f"{VOLUME_PATH}/models/surya_detection"
+
 class SuryaOCR(OCRInstance):
     def __init__(self, max_height=1500, min_height=350, padding=6):
         """
@@ -31,18 +41,60 @@ class SuryaOCR(OCRInstance):
             min_height (int): Minimum height for images during detection
             padding (int): Number of pixels to add around each bbox
         """
-        self.detection_predictor = DetectionPredictor(device="cuda")
+        # Initialize detection predictor with caching
+        try:
+            # Try to load from volume if available
+            if os.path.exists(DETECTION_MODEL_PATH):
+                print("Loading detection model from volume...")
+                self.detection_predictor = DetectionPredictor(device="cuda", model_path=DETECTION_MODEL_PATH)
+            else:
+                print("Initializing detection model for the first time...")
+                self.detection_predictor = DetectionPredictor(device="cuda")
+                # Save to volume if possible (assuming it has a save method, adjust as needed)
+                os.makedirs(DETECTION_MODEL_PATH, exist_ok=True)
+                # If DetectionPredictor has a save method, use it here
+        except Exception as e:
+            print(f"Error loading detection model: {e}")
+            self.detection_predictor = DetectionPredictor(device="cuda")
+            
         self.max_height = max_height
         self.min_height = min_height
         self.padding = padding
+        
+        # Create model directory if it doesn't exist
+        os.makedirs(MODEL_PATH, exist_ok=True)
+        
         try:
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype="auto", device_map="auto"
-            )
-            self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", use_fast=True)
-            print("Loaded model successfully")
+            # Check if model exists locally in the volume
+            if os.path.exists(f"{MODEL_PATH}/config.json"):
+                print("Loading Qwen model from volume...")
+                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    MODEL_PATH, torch_dtype="auto", device_map="auto"
+                )
+                self.processor = AutoProcessor.from_pretrained(MODEL_PATH, use_fast=True)
+            else:
+                print("Downloading Qwen model for the first time...")
+                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                    "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype="auto", device_map="auto"
+                )
+                self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", use_fast=True)
+                
+                # Save model to volume for future use
+                self.model.save_pretrained(MODEL_PATH)
+                self.processor.save_pretrained(MODEL_PATH)
+                
+            print("Loaded Qwen model successfully")
         except Exception as e:
-            print("Failed to load model:", str(e))
+            print("Failed to load Qwen model:", str(e))
+            
+    @classmethod
+    def get_instance(cls, *args, **kwargs):
+        """Get or create a singleton instance of SuryaOCR"""
+        global _surya_ocr_instance
+        if _surya_ocr_instance is None:
+            print("Creating new SuryaOCR instance")
+            _surya_ocr_instance = cls(*args, **kwargs)
+        return _surya_ocr_instance
 
     def scale_image_if_needed(self, image: Image.Image, min_height=300) -> tuple[Image.Image, float]:
         """
@@ -368,7 +420,7 @@ class SuryaOCR(OCRInstance):
             processed_outputs = []
             for txt in output_texts:
                 print(txt)
-                extracted = txt.split("<extracted_text>")[1].split("</extracted_text>")[0].strip()
+                extracted = txt.split("<extracted_text>")[1].split("</extracted_text>")[0].strip().replace('|', '')
                 processed_outputs.append(extracted)
 
             all_outputs.extend(processed_outputs)
@@ -447,7 +499,7 @@ class SuryaOCR(OCRInstance):
 
 class SuryaOCRAgent():
     def __init__(self) -> None:
-        self.ocr = SuryaOCR()
+        self.ocr = SuryaOCR.get_instance()
     
     def decode_base64(self, base64_string):
         decoded_bytes = base64.b64decode(base64_string)
@@ -467,3 +519,12 @@ class SuryaOCRAgent():
             min_confidence=50
         )
         return output_filename
+        
+    @classmethod
+    def get_instance(cls):
+        """Get or create a singleton instance of SuryaOCRAgent"""
+        global _recognition_model_instance
+        if _recognition_model_instance is None:
+            print("Creating new SuryaOCRAgent instance")
+            _recognition_model_instance = cls()
+        return _recognition_model_instance

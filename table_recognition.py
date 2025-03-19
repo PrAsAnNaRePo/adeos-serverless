@@ -19,7 +19,7 @@ import base64
 import cv2
 import numpy as np
 from typing_extensions import List
-
+import polars as pl
 
 class SuryaOCR(OCRInstance):
     def __init__(self, max_height=1500, min_height=350, padding=6):

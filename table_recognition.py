@@ -75,9 +75,9 @@ class SuryaOCR(OCRInstance):
             else:
                 print("Downloading Qwen model for the first time...")
                 self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    "Qwen/Qwen2.5-VL-3B-Instruct", torch_dtype="auto", device_map="auto"
+                    "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype="auto", device_map="auto"
                 )
-                self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-3B-Instruct", use_fast=True)
+                self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", use_fast=True)
                 
                 # Save model to volume for future use
                 self.model.save_pretrained(MODEL_PATH)
@@ -322,7 +322,7 @@ class SuryaOCR(OCRInstance):
         # for i in range(len(all_slices)): all_slices[i].save(f"{i}.png")
         all_base64_images = [self.convert_to_base64(i) for i in all_slices]
         
-        batch_size = 24
+        batch_size = 16
         ocr = []
         for i in range(0, len(all_base64_images), batch_size):
             batch_chunk = all_base64_images[i:i + batch_size]

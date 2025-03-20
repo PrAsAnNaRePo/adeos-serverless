@@ -1,7 +1,7 @@
 FROM python:3.10-slim-bullseye
 
 RUN apt-get update && \
-    apt-get install -y libcairo2-dev pkg-config build-essential ffmpeg libsm6 libxext6 && \
+    apt-get install -y libcairo2-dev pkg-config build-essential ffmpeg libsm6 libxext6 git && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

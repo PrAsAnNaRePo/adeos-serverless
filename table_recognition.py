@@ -46,7 +46,7 @@ class SuryaOCR(OCRInstance):
             # Try to load from volume if available
             if os.path.exists(DETECTION_MODEL_PATH):
                 print("Loading detection model from volume...")
-                self.detection_predictor = DetectionPredictor(device="cuda", model_path=DETECTION_MODEL_PATH)
+                self.detection_predictor = DetectionPredictor(device="cuda")
             else:
                 print("Initializing detection model for the first time...")
                 self.detection_predictor = DetectionPredictor(device="cuda")

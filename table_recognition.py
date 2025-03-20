@@ -377,7 +377,7 @@ class SuryaOCR(OCRInstance):
 - If you can't extract anything or see anything, respond with '' inside the <extracted_text>."""},
                     {'role': 'user', 'content': [
                         {"type": "image", "image": f"data:image;base64,{img}"},
-                        {"type": "text", "text": "Extract only the text from this image."},
+                        {"type": "text", "text": "Extract the text from this image using <extracted_text>."},
                      ],
                     }
                 ]

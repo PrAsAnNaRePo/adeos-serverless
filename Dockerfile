@@ -1,4 +1,4 @@
-FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
+FROM python:3.10-slim-bullseye
 
 RUN apt-get update && \
     apt-get install -y libcairo2-dev pkg-config build-essential ffmpeg libsm6 libxext6 && \

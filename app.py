@@ -24,18 +24,24 @@ def handler(job):
 
     try:
         if route == "detect":
-            # Handle detect route
-            low_res_base64 = job_input["low_res"]
-            high_res_base64 = job_input["high_res"]
+            batch_data = job_input["batch_data"]
             
-            # Convert base64 to PIL Image
-            low_res_image = base64_to_pil_image(low_res_base64)
-            high_res_image = base64_to_pil_image(high_res_base64)
+            # Process each item in the batch
+            image_pairs = []
+            for item in batch_data:
+                low_res_base64 = item["low_res"]
+                high_res_base64 = item.get("high_res", low_res_base64)  # Use low_res if high_res not provided
+                
+                low_res_image = base64_to_pil_image(low_res_base64)
+                high_res_image = base64_to_pil_image(high_res_base64)
+                
+                image_pairs.append((low_res_image, high_res_image))
             
-            # Detect tables
-            detection_results = detection_model.detect_bbox(low_res_image, high_res_image)
+            # Run batch detection
+            detection_results = detection_model.detect_bbox_batch(image_pairs)
+            
             return {"detection_results": detection_results}
-            
+
         elif route == "recognize":
             # Handle recognize route
             image_base64 = job_input["image"]

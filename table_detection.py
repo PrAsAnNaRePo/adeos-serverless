@@ -3,15 +3,33 @@ import base64
 import cv2
 import numpy as np
 import onnxruntime
+import concurrent.futures
+from typing import List, Dict, Tuple, Optional, Union
+from PIL import Image
 
 class OBBModule: 
     def __init__(self, model_path, class_labels=None):
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"Model path not found: {model_path}")
         
+        # Set the maximum number of parallel workers
+        self.max_workers = os.cpu_count() - 4
+        
+        # Create a session options object for optimizations
+        session_options = onnxruntime.SessionOptions()
+        session_options.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_ENABLE_ALL
+        session_options.intra_op_num_threads = 1  # Set to 1 for better parallelism
+        
         try:
-            self.session = onnxruntime.InferenceSession(model_path, providers=["CPUExecutionProvider"])
+            # Try to use CUDA if available, otherwise fall back to CPU
+            providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+            self.session = onnxruntime.InferenceSession(
+                model_path, 
+                sess_options=session_options,
+                providers=providers
+            )
             print(f"Successfully loaded ONNX model from {model_path}")
+            print(f"Using provider: {self.session.get_providers()[0]}")
         except Exception as e:
             raise RuntimeError(f"Failed to load the ONNX model: {e}")
         
@@ -26,42 +44,63 @@ class OBBModule:
         self.classes = class_labels if class_labels else {0: 'tables', 1: 'tilted', 2: 'empty'}
 
     def preprocess(self, image):
-        resized = cv2.resize(image, (self.input_width, self.input_height))
+        """Preprocess a single image for inference"""
+        # Convert PIL Image to OpenCV format if needed
+        if isinstance(image, Image.Image):
+            frame = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+        else:
+            frame = image
+            
+        resized = cv2.resize(frame, (self.input_width, self.input_height))
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
         normalized = rgb.astype(np.float32) / 255.0
         transposed = normalized.transpose(2, 0, 1)  # CHW format
         batched = np.expand_dims(transposed, axis=0)  # Add batch dimension
         return batched
 
-    def detect_bbox(self, image1, image2=None, confidence_threshold=0.35, iou_threshold=0.45):
-        # Convert PIL Image to OpenCV format
-        frame = cv2.cvtColor(np.array(image1), cv2.COLOR_RGB2BGR)
+    def detect_single(self, 
+                     low_res_image, 
+                     high_res_image=None, 
+                     confidence_threshold=0.35, 
+                     iou_threshold=0.45) -> Dict:
+        """
+        Process a single image pair (low_res for detection, high_res for annotation)
+        """
+        # Convert PIL Image to OpenCV format if needed
+        if isinstance(low_res_image, Image.Image):
+            frame = cv2.cvtColor(np.array(low_res_image), cv2.COLOR_RGB2BGR)
+        else:
+            frame = low_res_image
+            
         original_height, original_width = frame.shape[:2]
         
-        if image2 is not None:
-            img2 = cv2.cvtColor(np.array(image2), cv2.COLOR_RGB2BGR)        
+        if high_res_image is not None:
+            if isinstance(high_res_image, Image.Image):
+                img2 = cv2.cvtColor(np.array(high_res_image), cv2.COLOR_RGB2BGR)
+            else:
+                img2 = high_res_image
+                
             target_height, target_width = img2.shape[:2]
             scale_factor_x = target_width / original_width
             scale_factor_y = target_height / original_height
-            print(f"Scaling factors - X: {scale_factor_x}, Y: {scale_factor_y}") 
         else:
             img2 = frame.copy()
             target_height, target_width = original_height, original_width
             scale_factor_x = scale_factor_y = 1
-            print("No img2 provided. Using img1 for annotations.")   
         
+        # Preprocess and run inference
         preprocessed = self.preprocess(frame)
-        print(f"Preprocessed shape: {preprocessed.shape}")
-        
         outputs = self.session.run(None, {self.input_name: preprocessed})
-        print(f"Model outputs: {outputs}") 
         
         # Postprocess the outputs to get bounding boxes
-        obb_data = self.postprocess(outputs, img2, confidence_threshold, iou_threshold, scale_factor_x, scale_factor_y)
+        obb_data = self.postprocess(outputs, img2, confidence_threshold, iou_threshold, 
+                                   scale_factor_x, scale_factor_y)
 
+        # Encode the output image
         _, buffer = cv2.imencode('.png', img2)
         base_img_string = base64.b64encode(buffer).decode('utf-8')
 
+        # Create response
         response = {
             "bbox_data": obb_data,
             "actual_image": base_img_string,
@@ -71,6 +110,63 @@ class OBBModule:
         }
         return response
 
+    def detect_bbox_batch(self, 
+                         image_pairs: List[Tuple[Image.Image, Optional[Image.Image]]], 
+                         confidence_threshold=0.35, 
+                         iou_threshold=0.45) -> List[Dict]:
+        """
+        Process multiple image pairs in parallel
+        
+        Args:
+            image_pairs: List of tuples (image1, image2) where:
+                         - image1 is the low-res image for detection
+                         - image2 is the high-res image for annotation (optional)
+            confidence_threshold: Minimum confidence threshold for detections
+            iou_threshold: IoU threshold for non-maximum suppression
+        
+        Returns:
+            List of detection results, one per image pair
+        """
+        # Use ThreadPoolExecutor for parallel processing
+        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            # Submit all tasks
+            future_to_idx = {}
+            for idx, (low_res, high_res) in enumerate(image_pairs):
+                future = executor.submit(
+                    self.detect_single, 
+                    low_res, 
+                    high_res, 
+                    confidence_threshold, 
+                    iou_threshold
+                )
+                future_to_idx[future] = idx
+            
+            # Collect results in the original order
+            results = [None] * len(image_pairs)
+            for future in concurrent.futures.as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    results[idx] = future.result()
+                except Exception as exc:
+                    print(f'Image at index {idx} generated an exception: {exc}')
+                    # Provide an empty result on error
+                    results[idx] = {
+                        "bbox_data": [],
+                        "actual_image": "",
+                        "height": 0,
+                        "width": 0,
+                        "num_tables": 0,
+                        "error": str(exc)
+                    }
+        
+        return results
+
+    def detect_bbox(self, image1, image2=None, confidence_threshold=0.35, iou_threshold=0.45):
+        """
+        Original method for backward compatibility
+        """
+        return self.detect_single(image1, image2, confidence_threshold, iou_threshold)
+
     def postprocess(self, outputs, img2, confidence_threshold, iou_threshold, scale_factor_x, scale_factor_y):
         img_height, img_width = img2.shape[:2]
         output_array = np.squeeze(outputs[0])
@@ -79,8 +175,7 @@ class OBBModule:
             output_array = output_array.transpose()
 
         num_detections = output_array.shape[0]
-        print(f"Number of detections before NMS: {num_detections}")  
-
+        
         boxes = []
         scores = []
         class_ids = []
@@ -106,11 +201,8 @@ class OBBModule:
                 boxes.append([x1, y1, w, h])
                 scores.append(float(confidence))
                 class_ids.append(int(class_id))
-                
-                print(f"Initial bbox {i}: Class ID={class_id}, Confidence={confidence}, Box={x1, y1, w, h}")  
 
         indices = cv2.dnn.NMSBoxes(boxes, scores, confidence_threshold, iou_threshold)
-        print(f"Indices after NMS: {indices}")  
 
         obb_data = []
 
@@ -138,9 +230,4 @@ class OBBModule:
                     "xywh": [x, y, w, h]
                 })
 
-                print(f"Final bbox: class_id={class_id}, confidence={confidence}, bbox={x1, y1, x2, y2}")  
-        else:
-            print("No detections after NMS.")
-
-        print(f"Number of detections after NMS: {len(obb_data)}")
         return obb_data

@@ -322,7 +322,7 @@ class SuryaOCR(OCRInstance):
         # for i in range(len(all_slices)): all_slices[i].save(f"{i}.png")
         all_base64_images = [self.convert_to_base64(i) for i in all_slices]
         
-        batch_size = 16
+        batch_size = os.environ['BATCH_SIZE'] or 32
         ocr = []
         for i in range(0, len(all_base64_images), batch_size):
             batch_chunk = all_base64_images[i:i + batch_size]
@@ -403,7 +403,7 @@ class SuryaOCR(OCRInstance):
             with torch.inference_mode():
                 generated_ids = self.model.generate(
                     **inputs,
-                    max_new_tokens=200,
+                    max_new_tokens=512,
                     pad_token_id=self.processor.tokenizer.eos_token_id  # Ensure proper padding
                 )
             

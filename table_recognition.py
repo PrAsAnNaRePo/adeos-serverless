@@ -322,7 +322,7 @@ class SuryaOCR(OCRInstance):
         # for i in range(len(all_slices)): all_slices[i].save(f"{i}.png")
         all_base64_images = [self.convert_to_base64(i) for i in all_slices]
         
-        batch_size = os.environ['BATCH_SIZE'] or 32
+        batch_size = int(os.environ.get('BATCH_SIZE', 32))
         ocr = []
         for i in range(0, len(all_base64_images), batch_size):
             batch_chunk = all_base64_images[i:i + batch_size]

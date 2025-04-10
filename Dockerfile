@@ -1,5 +1,6 @@
 FROM python:3.10-slim-bullseye
 
+# Install system dependencies
 RUN apt-get update && \
     apt-get install -y libcairo2-dev pkg-config build-essential ffmpeg libsm6 libxext6 git && \
     apt-get clean && \
@@ -7,13 +8,16 @@ RUN apt-get update && \
 
 WORKDIR /app
 
+# Install uv
+RUN pip install uv
+
 # Install RunPod SDK first
-RUN pip install runpod
+RUN uv pip install --system runpod
 
 # Install other dependencies
 COPY requirements.txt .
-RUN python3.10 -m pip install --no-cache-dir -r requirements.txt
-RUN python3.10 -m pip install -U surya-ocr
+RUN uv pip install --system -r requirements.txt
+RUN uv pip install --system -U surya-ocr
 
 # Copy all files
 COPY . .
@@ -21,5 +25,5 @@ COPY . .
 # Set timezone
 RUN ln -snf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && echo "Asia/Kolkata" > /etc/timezone
 
-# Start the RunPod handler (not uvicorn)
+# Start the RunPod handler
 CMD ["python", "app.py"]

@@ -1,6 +1,5 @@
 FROM runpod/pytorch:2.1.0-py3.10-cuda11.8.0-devel-ubuntu22.04
 
-# Install system dependencies
 RUN apt-get update && \
     apt-get install -y libcairo2-dev pkg-config build-essential ffmpeg libsm6 libxext6 git && \
     apt-get clean && \
@@ -8,21 +7,13 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-# Install uv
-RUN pip install uv
+RUN pip install runpod
 
-# Install RunPod SDK first
-RUN uv pip install --system runpod
-
-# Install other dependencies
 COPY requirements.txt .
-RUN uv pip install --system -r requirements.txt
+RUN pip install -r requirements.txt
 
-# Copy all files
 COPY . .
 
-# Set timezone
 RUN ln -snf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && echo "Asia/Kolkata" > /etc/timezone
 
-# Start the RunPod handler
 CMD ["python", "app.py"]

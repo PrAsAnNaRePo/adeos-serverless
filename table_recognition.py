@@ -350,13 +350,10 @@ class SuryaOCR(OCRInstance):
             }],
         }
         
-        with open("ocr_results.json", "w") as json_file:
-            json.dump(d, json_file, indent=4)
+        # with open("ocr_results.json", "w") as json_file:
+        #     json.dump(d, json_file, indent=4)
         
         return d["pages"]
-    
-    def get_recognition_duplicate(self, image):
-        return '0', 1, 1
 
     def get_recognition(self, images, batch_size=128):
         all_outputs = []

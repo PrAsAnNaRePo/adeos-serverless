@@ -17,7 +17,6 @@ RUN uv pip install --system runpod
 # Install other dependencies
 COPY requirements.txt .
 RUN uv pip install --system -r requirements.txt
-RUN uv pip install --system -U surya-ocr
 
 # Copy all files
 COPY . .

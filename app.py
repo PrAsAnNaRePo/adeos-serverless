@@ -45,24 +45,16 @@ def handler(job):
         elif route == "recognize":
             # Handle recognize route
             image_base64 = job_input["image"]
-            output_file_name = job_input["output_file_name"]
             
             # Convert base64 to PIL Image
             image = base64_to_pil_image(image_base64)
             image_b64 = utils.pil_image_to_base64(image)
             
             # Recognize tables
-            extracted_file_name = recognition_model(image_b64, output_file_name)
-            
-            # Read the Excel file and convert to base64
-            with open(extracted_file_name, "rb") as f:
-                excel_bytes = f.read()
-            excel_base64 = base64.b64encode(excel_bytes).decode("utf-8")
+            extracted_html = recognition_model(image_b64)
             
             return {
-                "file_name": extracted_file_name,
-                "file_content_base64": excel_base64,
-                "content_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                "html": extracted_html
             }
             
         elif route == "get_extract_info":

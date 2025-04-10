@@ -505,20 +505,17 @@ class SuryaOCRAgent():
         decoded_bytes = base64.b64decode(base64_string)
         return decoded_bytes
     
-    def __call__(self, base64: str, file_name: str):
+    def __call__(self, base64: str):
         base64_bytes = self.decode_base64(base64)
         doc = DocImage(base64_bytes)
-        output_filename = f'{file_name}.xlsx'
         print("Starting to process document...")
-        doc.to_xlsx(
-            dest=output_filename,
+        extracted_tables = doc.extract_tables(
             ocr=self.ocr,
-            implicit_rows=True,
             implicit_columns=True,
-            borderless_tables=True,
-            min_confidence=50
+            implicit_rows=True
         )
-        return output_filename
+        print(extracted_tables)
+        return extracted_tables[0].html if extracted_tables else None
         
     @classmethod
     def get_instance(cls):

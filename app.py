@@ -57,13 +57,13 @@ def handler(job):
                 "html": extracted_html
             }
             
-        # elif route == "get_extract_info":
-        #     # Handle get_extract_info route
-        #     if os.path.exists('ocr_results.json'):
-        #         with open('ocr_results.json', 'r') as f:
-        #             return json.load(f)
-        #     else:
-        #         return []
+        elif route == "get_extract_info":
+            # Handle get_extract_info route
+            if os.path.exists('ocr_results.json'):
+                with open('ocr_results.json', 'r') as f:
+                    return json.load(f)
+            else:
+                return []
         
         else:
             return {"error": f"Unknown route: {route}"}

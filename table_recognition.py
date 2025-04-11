@@ -350,8 +350,8 @@ class SuryaOCR(OCRInstance):
             }],
         }
         
-        # with open("ocr_results.json", "w") as json_file:
-        #     json.dump(d, json_file, indent=4)
+        with open("ocr_results.json", "w") as json_file:
+            json.dump(d, json_file, indent=4)
         
         return d["pages"]
 

@@ -283,7 +283,8 @@ class SuryaOCR(OCRInstance):
         all_slices = []
         all_polygons = []
         all_bboxes = []
-
+        total_input_tokens = 0
+        total_output_tokens = 0
         # Process detections and scale back to original size if needed
         for idx, (det_pred, image, scale_factor, lang) in enumerate(zip(detec_prediction, valid_images, scale_factors, ['en'])):
             # Scale polygons and bboxes back to original size if needed
@@ -326,9 +327,15 @@ class SuryaOCR(OCRInstance):
         ocr = []
         for i in range(0, len(all_base64_images), batch_size):
             batch_chunk = all_base64_images[i:i + batch_size]
-            ocr.extend(self.get_recognition(batch_chunk, batch_size=batch_size))
+            ocr_chunk, input_tokens, output_tokens = self.get_recognition(batch_chunk, batch_size=batch_size)
+            ocr.extend(ocr_chunk)
+            total_input_tokens += input_tokens
+            total_output_tokens += output_tokens
+
         print("Ocrs:\n", ocr)
         print("num cells: ", len(ocr))
+        print("input tokens: ", total_input_tokens)
+        print("output tokens: ", total_output_tokens)
         
         result = []
         for idx, (pred, polygon, bbox) in enumerate(zip(ocr, all_polygons, all_bboxes)):
@@ -348,6 +355,8 @@ class SuryaOCR(OCRInstance):
                 'language': ['en'],
                 'page': 1
             }],
+            "input_tokens": total_input_tokens,
+            "output_tokens": total_output_tokens
         }
         
         with open("ocr_results.json", "w") as json_file:
@@ -357,6 +366,8 @@ class SuryaOCR(OCRInstance):
 
     def get_recognition(self, images, batch_size=128):
         all_outputs = []
+        input_tokens = 0
+        output_tokens = 0
         for i in range(0, len(images), batch_size):
             chunk_images = images[i:i + batch_size]
             messages_batch = []
@@ -413,6 +424,9 @@ class SuryaOCR(OCRInstance):
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )
+            input_tokens += inputs.input_ids.numel()
+            batch_new_tokens = sum(t.numel() for t in generated_ids_trimmed)
+            output_tokens += batch_new_tokens
 
             processed_outputs = []
             for txt in output_texts:
@@ -426,7 +440,7 @@ class SuryaOCR(OCRInstance):
             del inputs, generated_ids, generated_ids_trimmed, image_inputs, video_inputs
             torch.cuda.empty_cache()
         
-        return all_outputs
+        return all_outputs, input_tokens, output_tokens
     
     def convert_to_base64(self, image: Image.Image) -> str:
         buffered = io.BytesIO()

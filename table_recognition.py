@@ -27,7 +27,7 @@ _surya_ocr_instance = None
 _recognition_model_instance = None
 
 # Path in the volume
-VOLUME_PATH = "/workspace/adeos-volume"
+VOLUME_PATH = "/runpod-volume"
 MODEL_PATH = f"{VOLUME_PATH}/models/Qwen2.5-VL-7B-Instruct"
 DETECTION_MODEL_PATH = f"{VOLUME_PATH}/models/surya_detection"
 
@@ -41,20 +41,30 @@ class SuryaOCR(OCRInstance):
             min_height (int): Minimum height for images during detection
             padding (int): Number of pixels to add around each bbox
         """
-        # Initialize detection predictor with caching
+        # Initialize detection predictor with checkpoint caching
         try:
-            # Try to load from volume if available
+            # Load or initialize detection predictor with checkpoint caching
             if os.path.exists(DETECTION_MODEL_PATH):
                 print("Loading detection model from volume...")
-                self.detection_predictor = DetectionPredictor(device="cuda")
+                # Pass the volume path as checkpoint to load from
+                self.detection_predictor = DetectionPredictor(
+                    checkpoint=DETECTION_MODEL_PATH, device="cuda"
+                )
             else:
                 print("Initializing detection model for the first time...")
+                # Initialize without checkpoint (downloads default)
                 self.detection_predictor = DetectionPredictor(device="cuda")
-                # Save to volume if possible (assuming it has a save method, adjust as needed)
+                # Create volume dir and save checkpoint for future runs
                 os.makedirs(DETECTION_MODEL_PATH, exist_ok=True)
-                # If DetectionPredictor has a save method, use it here
+                try:
+                    # Attempt to save using HF-style API
+                    self.detection_predictor.save_pretrained(DETECTION_MODEL_PATH)
+                except AttributeError:
+                    # Fallback to generic save method
+                    self.detection_predictor.save(DETECTION_MODEL_PATH)
         except Exception as e:
             print(f"Error loading detection model: {e}")
+            # Fallback to basic init
             self.detection_predictor = DetectionPredictor(device="cuda")
             
         self.max_height = max_height

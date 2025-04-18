@@ -430,7 +430,7 @@ class SuryaOCR(OCRInstance):
                 skip_special_tokens=True,
                 clean_up_tokenization_spaces=False
             )
-            input_tokens += inputs.input_ids.numel()
+            input_tokens += inputs.attention_mask.sum().item()
             batch_new_tokens = sum(t.numel() for t in generated_ids_trimmed)
             output_tokens += batch_new_tokens
 

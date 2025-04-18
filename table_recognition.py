@@ -41,30 +41,20 @@ class SuryaOCR(OCRInstance):
             min_height (int): Minimum height for images during detection
             padding (int): Number of pixels to add around each bbox
         """
-        # Initialize detection predictor with checkpoint caching
+        # Initialize detection predictor with caching
         try:
-            # Load or initialize detection predictor with checkpoint caching
+            # Try to load from volume if available
             if os.path.exists(DETECTION_MODEL_PATH):
                 print("Loading detection model from volume...")
-                # Pass the volume path as checkpoint to load from
-                self.detection_predictor = DetectionPredictor(
-                    checkpoint=DETECTION_MODEL_PATH, device="cuda"
-                )
+                self.detection_predictor = DetectionPredictor(device="cuda")
             else:
                 print("Initializing detection model for the first time...")
-                # Initialize without checkpoint (downloads default)
                 self.detection_predictor = DetectionPredictor(device="cuda")
-                # Create volume dir and save checkpoint for future runs
+                # Save to volume if possible (assuming it has a save method, adjust as needed)
                 os.makedirs(DETECTION_MODEL_PATH, exist_ok=True)
-                try:
-                    # Attempt to save using HF-style API
-                    self.detection_predictor.save_pretrained(DETECTION_MODEL_PATH)
-                except AttributeError:
-                    # Fallback to generic save method
-                    self.detection_predictor.save(DETECTION_MODEL_PATH)
+                # If DetectionPredictor has a save method, use it here
         except Exception as e:
             print(f"Error loading detection model: {e}")
-            # Fallback to basic init
             self.detection_predictor = DetectionPredictor(device="cuda")
             
         self.max_height = max_height

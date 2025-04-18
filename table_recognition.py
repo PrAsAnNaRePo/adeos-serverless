@@ -437,8 +437,21 @@ class SuryaOCR(OCRInstance):
             processed_outputs = []
             for txt in output_texts:
                 print(txt)
-                extracted = txt.split("<extracted_text>")[1].split("</extracted_text>")[0].strip().replace('|', '')
-                processed_outputs.append(extracted)
+
+                if '<extracted_text>' in txt and '</extracted_text>' in txt:
+                    extracted_text = txt.split("<extracted_text>")[1].split("</extracted_text>")[0]
+                    if '|' in extracted_text:
+                        if len(extracted_text.strip()) == 1:
+                            extracted_text = '1'
+                        else:
+                            extracted_text = extracted_text.replace('|', '')
+                    
+                    if extracted_text.count(extracted_text[0]) == len(extracted_text):
+                        extracted_text = ''
+                else:
+                    extracted_text = ''
+                
+                processed_outputs.append(extracted_text)
 
             all_outputs.extend(processed_outputs)
             

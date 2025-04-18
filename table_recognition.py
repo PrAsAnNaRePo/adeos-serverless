@@ -446,8 +446,9 @@ class SuryaOCR(OCRInstance):
                         else:
                             extracted_text = extracted_text.replace('|', '')
                     
-                    if extracted_text.count(extracted_text[0]) == len(extracted_text):
+                    if len(extracted_text) > 1 and extracted_text.count(extracted_text[0]) == len(extracted_text):
                         extracted_text = ''
+
                 else:
                     extracted_text = ''
                 

@@ -21,15 +21,25 @@ import cv2
 import numpy as np
 from typing_extensions import List
 import polars as pl
+from pathlib import Path
 
 # Singleton instances
 _surya_ocr_instance = None
 _recognition_model_instance = None
 
-# Path in the volume
-VOLUME_PATH = "/runpod-volume"
-MODEL_PATH = f"{VOLUME_PATH}/models/Qwen2.5-VL-7B-Instruct"
-DETECTION_MODEL_PATH = f"{VOLUME_PATH}/models/surya_detection"
+VOLUME_PATH = Path("/runpod-volume")
+MODEL_PATH = VOLUME_PATH / "models" / "Qwen2.5-VL-7B-Instruct"
+DETECTION_MODEL_PATH = VOLUME_PATH / "models" / "surya_detection"
+CACHE_PATH = VOLUME_PATH / "hf_cache"
+TORCH_CACHE_PATH = VOLUME_PATH / "torch_cache"
+
+for p in (MODEL_PATH, DETECTION_MODEL_PATH, CACHE_PATH, TORCH_CACHE_PATH):
+    p.mkdir(parents=True, exist_ok=True)
+
+os.environ.setdefault("HF_HOME", str(CACHE_PATH))
+os.environ.setdefault("HUGGINGFACE_HUB_CACHE", str(CACHE_PATH))
+os.environ.setdefault("TRANSFORMERS_CACHE", str(CACHE_PATH))
+os.environ.setdefault("TORCH_HOME", str(TORCH_CACHE_PATH))
 
 class SuryaOCR(OCRInstance):
     def __init__(self, max_height=1500, min_height=350, padding=6):
@@ -42,50 +52,46 @@ class SuryaOCR(OCRInstance):
             padding (int): Number of pixels to add around each bbox
         """
         # Initialize detection predictor with caching
-        try:
-            # Try to load from volume if available
-            if os.path.exists(DETECTION_MODEL_PATH):
-                print("Loading detection model from volume...")
-                self.detection_predictor = DetectionPredictor(device="cuda")
-            else:
-                print("Initializing detection model for the first time...")
-                self.detection_predictor = DetectionPredictor(device="cuda")
-                # Save to volume if possible (assuming it has a save method, adjust as needed)
-                os.makedirs(DETECTION_MODEL_PATH, exist_ok=True)
-                # If DetectionPredictor has a save method, use it here
-        except Exception as e:
-            print(f"Error loading detection model: {e}")
-            self.detection_predictor = DetectionPredictor(device="cuda")
-            
         self.max_height = max_height
         self.min_height = min_height
         self.padding = padding
         
-        # Create model directory if it doesn't exist
-        os.makedirs(MODEL_PATH, exist_ok=True)
-        
         try:
-            # Check if model exists locally in the volume
-            if os.path.exists(f"{MODEL_PATH}/config.json"):
-                print("Loading Qwen model from volume...")
-                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    MODEL_PATH, torch_dtype="auto", device_map="auto"
-                )
-                self.processor = AutoProcessor.from_pretrained(MODEL_PATH, use_fast=True)
+            self.detection_predictor = DetectionPredictor(device="cuda")
+        except Exception as exc:  # pragma: no cover
+            print(f"[SuryaOCR] Falling back to CPU detection due to: {exc}")
+            self.detection_predictor = DetectionPredictor(device="cpu")
+        
+        self._load_qwen_model()
+    
+    def _load_qwen_model(self) -> None:
+        """Download or load Qwen‑VL from the Network Volume."""
+        try:
+            if (MODEL_PATH / "config.json").exists():
+                print("[SuryaOCR] Loading Qwen model from volume …")
             else:
-                print("Downloading Qwen model for the first time...")
-                self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                    "Qwen/Qwen2.5-VL-7B-Instruct", torch_dtype="auto", device_map="auto"
-                )
-                self.processor = AutoProcessor.from_pretrained("Qwen/Qwen2.5-VL-7B-Instruct", use_fast=True)
-                
-                # Save model to volume for future use
+                print("[SuryaOCR] Downloading Qwen model for the first time …")
+
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                "Qwen/Qwen2.5-VL-7B-Instruct",
+                cache_dir=str(CACHE_PATH),
+                torch_dtype="auto",
+                device_map="auto",
+            )
+            self.processor = AutoProcessor.from_pretrained(
+                "Qwen/Qwen2.5-VL-7B-Instruct",
+                cache_dir=str(CACHE_PATH),
+                use_fast=True,
+            )
+
+            # Persist for future cold‑starts only if not already on disk
+            if not (MODEL_PATH / "config.json").exists():
                 self.model.save_pretrained(MODEL_PATH)
                 self.processor.save_pretrained(MODEL_PATH)
-                
-            print("Loaded Qwen model successfully")
-        except Exception as e:
-            print("Failed to load Qwen model:", str(e))
+
+            print("[SuryaOCR] Qwen model ready 🎉")
+        except Exception as exc:  # pragma: no cover
+            raise RuntimeError(f"Failed to load Qwen model: {exc}") from exc
             
     @classmethod
     def get_instance(cls, *args, **kwargs):

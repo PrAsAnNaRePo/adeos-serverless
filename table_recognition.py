@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 import os
 from surya.detection import DetectionPredictor
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor, BitsAndBytesConfig
 from qwen_vl_utils import process_vision_info
 import json
 import torch
@@ -27,7 +27,8 @@ from pathlib import Path
 _surya_ocr_instance = None
 _recognition_model_instance = None
 
-model_name = os.environ.get("MODEL_NAME", "Qwen2.5-VL-7B-Instruct")
+model_name = os.environ.get("MODEL_NAME", "Qwen/Qwen2.5-VL-7B-Instruct")
+quanitize = os.environ.get("QUANITIZE", "YES")
 
 VOLUME_PATH = Path("/runpod-volume")
 MODEL_PATH = VOLUME_PATH / "models" / model_name
@@ -74,11 +75,17 @@ class SuryaOCR(OCRInstance):
             else:
                 print("[SuryaOCR] Downloading Qwen model for the first time …")
 
+            quantization_config = None
+            if quantize == "YES":
+                quantization_config = BitsAndBytesConfig(load_in_8bit=True)
+            
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
                 cache_dir=str(CACHE_PATH),
                 torch_dtype="auto",
                 device_map="auto",
+                attn_implementation="flash_attention_2",
+                quantization_config=quantization_config
             )
             self.processor = AutoProcessor.from_pretrained(
                 model_name,

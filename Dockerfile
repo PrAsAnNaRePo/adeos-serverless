@@ -7,11 +7,9 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-RUN pip install runpod
-
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-
+RUN pip uninstall opencv-contrib-python opencv-python && pip install opencv-contrib-python
 COPY . .
 
 RUN ln -snf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && echo "Asia/Kolkata" > /etc/timezone

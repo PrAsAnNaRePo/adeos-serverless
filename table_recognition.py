@@ -76,13 +76,13 @@ class SuryaOCR(OCRInstance):
                 print("[SuryaOCR] Downloading Qwen model for the first time …")
 
             quantization_config = None
-            if quantize == "YES":
+            if quanitize == "YES":
                 quantization_config = BitsAndBytesConfig(load_in_8bit=True)
             
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
                 model_name,
                 cache_dir=str(CACHE_PATH),
-                torch_dtype="auto",
+                torch_dtype="float16",
                 device_map="auto",
                 attn_implementation="flash_attention_2",
                 quantization_config=quantization_config

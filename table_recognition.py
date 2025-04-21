@@ -27,8 +27,10 @@ from pathlib import Path
 _surya_ocr_instance = None
 _recognition_model_instance = None
 
+model_name = os.environ.get("MODEL_NAME", "Qwen2.5-VL-7B-Instruct")
+
 VOLUME_PATH = Path("/runpod-volume")
-MODEL_PATH = VOLUME_PATH / "models" / "Qwen2.5-VL-7B-Instruct"
+MODEL_PATH = VOLUME_PATH / "models" / model_name
 DETECTION_MODEL_PATH = VOLUME_PATH / "models" / "surya_detection"
 CACHE_PATH = VOLUME_PATH / "hf_cache"
 TORCH_CACHE_PATH = VOLUME_PATH / "torch_cache"
@@ -73,13 +75,13 @@ class SuryaOCR(OCRInstance):
                 print("[SuryaOCR] Downloading Qwen model for the first time …")
 
             self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                "Qwen/Qwen2.5-VL-7B-Instruct",
+                model_name,
                 cache_dir=str(CACHE_PATH),
                 torch_dtype="auto",
                 device_map="auto",
             )
             self.processor = AutoProcessor.from_pretrained(
-                "Qwen/Qwen2.5-VL-7B-Instruct",
+                model_name,
                 cache_dir=str(CACHE_PATH),
                 use_fast=True,
             )
@@ -440,7 +442,7 @@ class SuryaOCR(OCRInstance):
 
                 if '<extracted_text>' in txt and '</extracted_text>' in txt:
                     extracted_text = txt.split("<extracted_text>")[1].split("</extracted_text>")[0]
-                    if '|' in extracted_text:
+                    if '|' in extracted_text or '!' in extracted_text:
                         if len(extracted_text.strip()) == 1:
                             extracted_text = '1'
                         else:

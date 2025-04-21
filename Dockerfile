@@ -10,6 +10,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 RUN pip uninstall opencv-contrib-python opencv-python && pip install opencv-contrib-python
+RUN pip install flash-attn --no-build-isolation
 COPY . .
 
 RUN ln -snf /usr/share/zoneinfo/Asia/Kolkata /etc/localtime && echo "Asia/Kolkata" > /etc/timezone

@@ -63,7 +63,6 @@ httpx==0.28.1
 huggingface-hub==0.30.2
 humanfriendly==10.0
 idna==3.4
-img2table==1.4.1
 importlib-metadata==4.6.4
 inquirerpy==0.3.4
 ipykernel==6.26.0
